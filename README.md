@@ -1,5 +1,8 @@
 # Simple Google ADK Interface
-Looks a bit nicer than adk web, in case you need to show it to someone not technical
+Looks a bit nicer than adk web, in case you need to show it to someone not technical.
+
+<img width="1673" height="603" alt="image" src="https://github.com/user-attachments/assets/e7331e6c-b377-4245-915d-0ff98fce2788" />
+
 
 ## Features
 
