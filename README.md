@@ -39,7 +39,16 @@ A lightweight, browser-based interface for interacting with Google's Agent Devel
 
 3. **Start your ADK server**
    
-   Make sure your ADK server is running and accessible at the configured URL.
+   Start the Google ADK server with the following command:
+   ```bash
+   adk api_server --session_service_uri=sqlite:///./session_storage.db --host 0.0.0.0 --allow_origins="*" --port 8000
+   ```
+   
+   This command starts the ADK API server with:
+   - SQLite session storage
+   - Listening on all network interfaces (0.0.0.0)
+   - CORS enabled for all origins
+   - Running on port 8000 (matching the default configuration)
 
 4. **Open the interface**
    
