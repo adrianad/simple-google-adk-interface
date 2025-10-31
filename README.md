@@ -26,7 +26,7 @@ A lightweight, browser-based interface for interacting with Google's Agent Devel
 
 2. **Configure the ADK server connection**
    
-   Open `index.html` and modify the `CONFIG` object (around line 183) with your ADK server settings:
+   Open `index.html` and locate the `CONFIG` object near the top of the `<script>` section:
    ```javascript
    const CONFIG = {
      serverUrl: 'http://127.0.0.1:8000',    // Your ADK server URL
@@ -34,8 +34,8 @@ A lightweight, browser-based interface for interacting with Google's Agent Devel
      defaultUser: 'demo-user'                // Default user ID
    };
    ```
-
-   Alternatively, you can reference the `.env.example` file for the expected configuration values.
+   
+   Update these values to match your ADK server settings. The `.env.example` file provides a reference template for the expected configuration values, but note that you must manually update the CONFIG object in `index.html` as the application does not read from environment variables.
 
 3. **Start your ADK server**
    
