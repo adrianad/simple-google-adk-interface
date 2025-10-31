@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>ADK API Interface</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      background:#f5f5f5;
+      display:flex;flex-direction:column;min-height:100%;
+    }
+    .header{
+      background:#fff;padding:1rem;border-bottom:1px solid #e0e0e0;
+      box-shadow:0 2px 4px rgba(0,0,0,.08)
+    }
+    .header h1{color:#333;font-size:1.4rem;margin-bottom:.4rem}
+    .server-config{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+    .server-config button{
+      padding:.5rem 1rem;background:#1976d2;color:#fff;border:0;border-radius:6px;cursor:pointer
+    }
+    .server-config button:hover{background:#1565c0}
+
+    .main-container{display:flex;gap:0;flex:1;min-height:0}
+    .sidebar{
+      width:260px;background:#fff;border-right:1px solid #e0e0e0;padding:1rem;overflow-y:auto
+    }
+    .sidebar h3{color:#333;margin-bottom:1rem;font-size:1rem}
+    .session-list{list-style:none}
+    .session-item{
+      padding:.6rem .7rem;margin-bottom:.5rem;background:#f8f9fa;border-radius:8px;cursor:pointer
+    }
+    .session-item.active{background:#1976d2;color:#fff}
+    .session-row{
+      display:flex;align-items:center;justify-content:space-between;gap:.5rem
+    }
+    .session-id{overflow:hidden;text-overflow:ellipsis}
+    .session-meta{font-size:.8rem;opacity:.7;display:flex;align-items:center;gap:.35rem}
+    .session-delete{
+      border:none;background:transparent;color:#f44336;cursor:pointer;
+      font-size:1rem;line-height:1; padding:.1rem .2rem; border-radius:4px;
+    }
+    .session-delete:hover{background:rgba(244,67,54,.08)}
+    .session-agent{font-size:.8rem;opacity:.7;margin-top:.25rem}
+
+    .chat-container{flex:1;display:flex;flex-direction:column;min-width:0;background:#fff}
+    .session-info{padding:.7rem 1rem;background:#f8f9fa;border-bottom:1px solid #e0e0e0;color:#666;font-size:.92rem}
+
+    .messages{
+      flex:1;min-height:0;
+      padding:1rem;overflow-y:auto;display:flex;flex-direction:column;gap:.7rem;
+      overscroll-behavior:contain;-webkit-overflow-scrolling:touch
+    }
+    .messages > *{flex:0 0 auto;min-width:0}
+
+    .bubble{max-width:70%;padding:.6rem .8rem;border-radius:10px;word-break:break-word}
+    .bubble.user{align-self:flex-end;background:#1976d2;color:#fff}
+    .bubble.system{align-self:center;background:#fff3cd;color:#856404;font-style:italic}
+    .bubble.assistant{align-self:flex-start;background:#f1f3f4;color:#111}
+    .bubble.assistant p{margin:.35rem 0}
+    .bubble.assistant ul,.bubble.assistant ol{margin:.4rem 0 .4rem 1.25rem}
+    .bubble.assistant li{margin:.2rem 0}
+
+    .turn{
+      align-self:stretch;border:1px solid #e5e7eb;background:#fafafa;border-radius:10px;
+      width:100%;overflow:visible;
+    }
+    .turn-header{
+      display:flex;align-items:center;justify-content:space-between;gap:.6rem;
+      padding:.65rem .85rem;cursor:pointer;background:#fdfdfd;min-height:42px;
+    }
+    .turn-header:hover{background:#f7f7f7}
+    .turn-title{flex:1;color:#111;font-size:.96rem;line-height:1.35;min-width:0}
+    .turn-meta{display:flex;align-items:center;gap:.5rem;white-space:nowrap}
+    .badge{
+      font-size:.72rem;padding:.1rem .45rem;border-radius:999px;border:1px solid #e2e8f0;color:#555;background:#fff
+    }
+    .spinner{
+      width:14px;height:14px;border:2px solid #c5d2e6;border-top-color:#1976d2;border-radius:50%;
+      animation:spin .9s linear infinite
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .caret{color:#666;font-size:.9rem}
+
+    .turn-details{
+      background:#fff;border-top:1px solid #eee;
+      max-height:0;overflow:hidden;transition:max-height .2s ease;will-change:max-height;
+    }
+    .turn-details.expanded{
+      max-height:70vh;overflow-y:auto;
+    }
+    .turn-details-inner{padding:.7rem .9rem;display:flex;flex-direction:column;gap:.5rem}
+
+    .interim{
+      border-left:3px solid #999;background:#f7f7f7;padding:.45rem .55rem;border-radius:6px
+    }
+    .interim .title{font-weight:600;margin-bottom:.2rem}
+    .interim .content{
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+      font-size:.9rem;white-space:pre-wrap
+    }
+
+    .tool{
+      border-left:3px solid #1976d2;background:#f6f9fe;border-radius:6px
+    }
+    .tool.resp{border-left-color:#4CAF50;background:#f4fbf4}
+    .tool .tool-head{
+      padding:.45rem .6rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;cursor:pointer
+    }
+    .tool .tool-title{font-weight:600}
+    .tool .tool-caret{color:#666}
+    .tool .tool-body{display:none}
+    .tool.open .tool-body{display:block}
+    .tool pre{
+      margin-top:.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:6px;padding:.5rem;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+      font-size:.86rem;white-space:pre-wrap;overflow-x:auto
+    }
+
+    .input-container{padding:.85rem 1rem;border-top:1px solid #e0e0e0;display:flex;gap:.7rem}
+    .input-container input{
+      flex:1;padding:.7rem .9rem;border:1px solid #ddd;border-radius:24px;font-size:1rem;outline:none
+    }
+    .input-container input:focus{border-color:#1976d2}
+    .input-container button{
+      padding:.7rem 1.2rem;background:#1976d2;color:#fff;border:0;border-radius:24px;cursor:pointer
+    }
+    .input-container button:hover{background:#1565c0}
+    .input-container button:disabled{background:#ccc;cursor:not-allowed}
+
+    .loading{display:none;text-align:center;padding:.6rem;color:#666}
+    .loading.show{display:block}
+
+    @media (max-width:768px){
+      .main-container{flex-direction:column}
+      .sidebar{width:100%;max-height:220px}
+      .bubble{max-width:100%}
+    }
+  </style>
+</head>
+<body>
+<header class="header">
+  <h1>ADK API Interface</h1>
+  <div class="server-config">
+    <div>
+      <label for="streaming">Streaming</label>
+      <input type="checkbox" id="streaming" checked style="vertical-align:middle;margin-left:.5rem"/>
+      <span id="streamStatus" style="margin-left:.4rem;color:#4CAF50">ON</span>
+    </div>
+    <button onclick="connectToServer()">Connect to Server</button>
+  </div>
+</header>
+
+<div class="main-container">
+  <aside class="sidebar">
+    <h3>Sessions</h3>
+    <ul class="session-list" id="sessionList">
+      <li class="system-message">No sessions yet</li>
+    </ul>
+    <div style="margin-top:1rem;">
+      <button onclick="createNewSession()" style="width:100%;padding:.55rem;background:#4CAF50;color:#fff;border:0;border-radius:6px;cursor:pointer">New Session</button>
+    </div>
+  </aside>
+
+  <main class="chat-container">
+    <div class="session-info" id="sessionInfo">Not connected to any session</div>
+    <div class="messages" id="messages">
+      <div class="bubble system">Welcome! Connect to a server and select an agent.</div>
+    </div>
+    <div class="loading" id="loading"><div>Processing...</div></div>
+    <div class="input-container">
+      <input type="text" id="messageInput" placeholder="Type your message here..." disabled/>
+      <button id="sendButton" onclick="sendMessage()" disabled>Send</button>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ---------------- Config / State ----------------
+  const CONFIG = {
+    serverUrl: 'http://127.0.0.1:8000',
+    defaultAgent: 'stats',
+    defaultUser: 'demo-user'
+  };
+  let currentAgent = CONFIG.defaultAgent;
+  let currentUser  = CONFIG.defaultUser;
+  let currentSessionId = null;
+
+  // sessions: Map<id, { id, agent, user, loaded, events, createdAt }>
+  const sessions = new Map();
+  const processedEvents = new Set();
+
+  // ---------------- Time parsing helpers ----------------
+  function parseTimestamp(v){
+    if (v == null) return null;
+    // String datetime
+    if (typeof v === 'string'){
+      const t = Date.parse(v);
+      if (!Number.isNaN(t)) return t;
+      // If numeric string
+      const n = Number(v);
+      if (!Number.isNaN(n)) return n > 1e12 ? n : n * 1000;
+      return null;
+    }
+    // Numeric epoch (sec or ms)
+    if (typeof v === 'number'){
+      return v > 1e12 ? v : v * 1000;
+    }
+    return null;
+  }
+  function extractCreatedAt(obj){
+    // Try several fields commonly returned by backends
+    const candidates = [
+      obj?.createTime, obj?.create_time, obj?.createdAt, obj?.created_at,
+      obj?.startTime, obj?.start_time,
+      obj?.lastUpdateTime, obj?.last_update_time, obj?.updatedAt, obj?.updated_at
+    ];
+    for (const c of candidates){
+      const ts = parseTimestamp(c);
+      if (ts) return ts;
+    }
+    return null;
+  }
+
+  // ---------------- Scroll helpers ----------------
+  function getMessagesEl(){ return document.getElementById('messages'); }
+  function isNearBottom(el, threshold=80){
+    return el.scrollHeight - (el.scrollTop + el.clientHeight) < threshold;
+  }
+  function maybeScrollToBottom(){
+    const el = getMessagesEl();
+    if (isNearBottom(el)) el.scrollTop = el.scrollHeight;
+  }
+  function setStreamingStatus(){
+    const cb = document.getElementById('streaming');
+    const label = document.getElementById('streamStatus');
+    label.textContent = cb.checked ? 'ON' : 'OFF';
+    label.style.color = cb.checked ? '#4CAF50' : '#f44336';
+  }
+  function offsetTopRelative(node, container){
+    let y = 0, n = node;
+    while (n && n !== container){
+      y += n.offsetTop;
+      n = n.offsetParent;
+    }
+    return y;
+  }
+  function preserveViewportAround(target, fn){
+    const container = getMessagesEl();
+    const before = offsetTopRelative(target, container);
+    const prevTop = container.scrollTop;
+    fn();
+    const after = offsetTopRelative(target, container);
+    container.scrollTop = prevTop + (after - before);
+  }
+
+  // ---------------- Text merge to avoid duplication ----------------
+  function mergeStreamingText(current, incoming){
+    if (!incoming) return current || '';
+    if (!current)  return incoming;
+    if (incoming.startsWith(current)) return incoming;
+    if (current.includes(incoming))  return current;
+    const maxOverlap = Math.min(current.length, incoming.length);
+    for (let k = maxOverlap; k > 0; k--){
+      if (current.slice(-k) === incoming.slice(0, k)){
+        return current + incoming.slice(k);
+      }
+    }
+    return current + incoming;
+  }
+
+  // ---------------- Bubbles ----------------
+  function addUserBubble(text){
+    const div = document.createElement('div');
+    div.className = 'bubble user';
+    div.textContent = text || '(no text)';
+    getMessagesEl().appendChild(div);
+    maybeScrollToBottom();
+  }
+  function addAssistantAnswerBubble(markdownText){
+    const div = document.createElement('div');
+    div.className = 'bubble assistant';
+    div.innerHTML = marked.parse(markdownText || '(no answer)');
+    getMessagesEl().appendChild(div);
+    maybeScrollToBottom();
+  }
+  function addSystemBubble(text){
+    const div = document.createElement('div');
+    div.className = 'bubble system';
+    div.textContent = text;
+    getMessagesEl().appendChild(div);
+    maybeScrollToBottom();
+  }
+
+  // ---------------- Collapsible mechanics ----------------
+  function expandDetails(detailsEl){ detailsEl.classList.add('expanded'); }
+  function collapseDetails(detailsEl){ detailsEl.classList.remove('expanded'); }
+  function toggleDetails(detailsEl, innerEl, turnEl){
+    const isOpen = detailsEl.classList.contains('expanded');
+    preserveViewportAround(turnEl, () => {
+      if (isOpen) collapseDetails(detailsEl);
+      else expandDetails(detailsEl);
+    });
+  }
+
+  // ---------------- Progress Turn UI ----------------
+  function createProgressTurnUI({ running=true, collapsed=true, initialTitle='Working…' } = {}){
+    const messages = getMessagesEl();
+
+    const turn = document.createElement('div');
+    turn.className = 'turn';
+
+    const header = document.createElement('div');
+    header.className = 'turn-header';
+
+    const title = document.createElement('div');
+    title.className = 'turn-title';
+    title.textContent = initialTitle;
+
+    const meta = document.createElement('div');
+    meta.className = 'turn-meta';
+
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner';
+
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = running ? 'running' : 'done';
+
+    const caret = document.createElement('span');
+    caret.className = 'caret';
+    caret.textContent = collapsed ? '▾' : '▴';
+
+    if (running) meta.appendChild(spinner);
+    meta.appendChild(badge);
+    meta.appendChild(caret);
+
+    header.appendChild(title);
+    header.appendChild(meta);
+
+    const details = document.createElement('div');
+    details.className = 'turn-details';
+    const detailsInner = document.createElement('div');
+    detailsInner.className = 'turn-details-inner';
+    details.appendChild(detailsInner);
+
+    if (!collapsed) expandDetails(details);
+
+    header.addEventListener('click', () => {
+      toggleDetails(details, detailsInner, turn);
+      caret.textContent = details.classList.contains('expanded') ? '▴' : '▾';
+    });
+
+    turn.appendChild(header);
+    turn.appendChild(details);
+    messages.appendChild(turn);
+
+    // Interim management
+    let currentInterimBlock = null;
+    function newInterimBlock(){
+      const block = document.createElement('div');
+      block.className = 'interim';
+      const t = document.createElement('div');
+      t.className = 'title';
+      t.textContent = 'Interim output';
+      const c = document.createElement('div');
+      c.className = 'content';
+      c.textContent = '';
+      block.appendChild(t); block.appendChild(c);
+      detailsInner.appendChild(block);
+      currentInterimBlock = block;
+      return block;
+    }
+    function upsertInterimText(text){
+      if (!currentInterimBlock) newInterimBlock();
+      currentInterimBlock.querySelector('.content').textContent = text || '';
+      if (isNearBottom(getMessagesEl())) maybeScrollToBottom();
+    }
+    function finalizeInterimBlock(){ currentInterimBlock = null; }
+
+    function addTool(kind, name, payload){
+      const wrap = document.createElement('div');
+      wrap.className = 'tool' + (kind === 'resp' ? ' resp' : '');
+      const head = document.createElement('div');
+      head.className = 'tool-head';
+      const ttl = document.createElement('div');
+      ttl.className = 'tool-title';
+      ttl.textContent = (kind === 'resp' ? '📋 Tool response: ' : '🔧 Calling tool: ') + name;
+      const c = document.createElement('span');
+      c.className = 'tool-caret';
+      c.textContent = '▾';
+      head.appendChild(ttl); head.appendChild(c);
+
+      const body = document.createElement('div');
+      body.className = 'tool-body';
+      const pre = document.createElement('pre');
+      pre.textContent = JSON.stringify(payload ?? {}, null, 2);
+      body.appendChild(pre);
+
+      head.addEventListener('click', () => {
+        preserveViewportAround(turn, () => {
+          wrap.classList.toggle('open');
+          c.textContent = wrap.classList.contains('open') ? '▴' : '▾';
+        });
+      });
+
+      wrap.appendChild(head); wrap.appendChild(body);
+      detailsInner.appendChild(wrap);
+      if (isNearBottom(getMessagesEl())) maybeScrollToBottom();
+    }
+
+    return {
+      root: turn,
+      header, title, meta, spinner, badge, caret,
+      details, detailsInner,
+      setStatus(text){ this.title.textContent = text || 'Working…'; },
+      setInterimText(newText){ upsertInterimText(newText); },
+      finalizeInterim(){ finalizeInterimBlock(); },
+      appendToolCall(name,args){ addTool('call',name,args); },
+      appendToolResponse(name,resp){ addTool('resp',name,resp); },
+      ensureCollapsed(){ collapseDetails(this.details); this.caret.textContent='▾'; },
+      ensureExpanded(){ expandDetails(this.details); this.caret.textContent='▴'; },
+      finish(){
+        if (this.spinner && this.spinner.parentNode) this.spinner.remove();
+        this.badge.textContent = 'done';
+        this.setStatus('Run details');
+        this.ensureCollapsed();
+      }
+    };
+  }
+
+  // ---------------- Sessions ----------------
+  async function connectToServer(){
+    try{
+      addSystemBubble('Connected to server successfully');
+      await loadAllExistingSessions();
+      if (sessions.size === 0) await createNewSession();
+      else await selectSession(getSortedSessionIds()[0]);
+    }catch(e){
+      addSystemBubble('Failed to connect to server: ' + e.message);
+    }
+  }
+
+  function updateSessionInfo(){
+    const el = document.getElementById('sessionInfo');
+    el.textContent = (currentSessionId && currentAgent && currentUser)
+      ? `Session: ${currentSessionId} | Agent: ${currentAgent} | User: ${currentUser}`
+      : 'Not connected to any session';
+  }
+
+  function getSortedSessionIds(){
+    // Sort by createdAt desc (newest first), fallback to id desc
+    return Array.from(sessions.values())
+      .sort((a,b) => {
+        const at = (b.createdAt ?? 0) - (a.createdAt ?? 0);
+        if (at !== 0) return at;
+        return String(b.id).localeCompare(String(a.id));
+      })
+      .map(s => s.id);
+  }
+
+  function updateSessionList(){
+    const ul = document.getElementById('sessionList');
+    ul.innerHTML = '';
+    if (sessions.size === 0){
+      ul.innerHTML = '<li class="system-message">No sessions yet</li>';
+      return;
+    }
+    const sortedIds = getSortedSessionIds();
+    for (const id of sortedIds){
+      const s = sessions.get(id);
+      const li = document.createElement('li');
+      li.className = 'session-item' + (id === currentSessionId ? ' active' : '');
+      li.dataset.sessionId = id;
+
+      li.innerHTML = `
+        <div class="session-row">
+          <span class="session-id">${id}</span>
+          <span class="session-meta">
+            <button class="session-delete" title="Delete session" onclick="event.stopPropagation(); deleteSession('${id}')">🗑️</button>
+          </span>
+        </div>
+        <div class="session-agent">${s.agent || currentAgent}</div>
+      `;
+      li.onclick = () => selectSession(id);
+      ul.appendChild(li);
+    }
+  }
+
+  async function loadAllExistingSessions(){
+    try{
+      const resp = await fetch(`${CONFIG.serverUrl}/apps/${currentAgent}/users/${currentUser}/sessions`);
+      if (!resp.ok) return;
+      const list = await resp.json();
+      for (const s of list){
+        const createdAt = extractCreatedAt(s) ?? Date.now(); // fallback
+        sessions.set(s.id, {
+          id: s.id,
+          agent: currentAgent,
+          user: currentUser,
+          loaded: false,
+          events: [],
+          createdAt
+        });
+      }
+      updateSessionList();
+    }catch(e){
+      console.error('loadAllExistingSessions error', e);
+    }
+  }
+
+  async function loadSession(sessionId){
+    try{
+      const resp = await fetch(`${CONFIG.serverUrl}/apps/${currentAgent}/users/${currentUser}/sessions/${sessionId}`);
+      if (!resp.ok) return false;
+      const data = await resp.json();
+      const sess = sessions.get(sessionId) || { id: sessionId };
+
+      const evs = Array.isArray(data.events) ? data.events.slice() : [];
+      evs.sort((a,b)=> (a.timestamp ?? 0) - (b.timestamp ?? 0));
+
+      // Update createdAt if server returns a better value
+      const ts = extractCreatedAt(data);
+      if (ts) sess.createdAt = ts;
+      else if (sess.createdAt == null) sess.createdAt = Date.now();
+
+      sess.events = evs;
+      sess.loaded = true;
+      sess.agent = sess.agent || currentAgent;
+      sess.user = sess.user || currentUser;
+      sessions.set(sessionId, sess);
+      return true;
+    }catch(e){
+      console.error('loadSession error', e);
+      return false;
+    }
+  }
+
+  async function createNewSession(){
+    let i=1, sid;
+    const existing = new Set(Array.from(sessions.keys()));
+    do { sid = `session-${i++}`; } while (existing.has(sid));
+    try{
+      const resp = await fetch(`${CONFIG.serverUrl}/apps/${currentAgent}/users/${currentUser}/sessions`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ sessionId: sid, state: {} })
+      });
+      if (!resp.ok && resp.status !== 409) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      sessions.set(sid, {
+        id: sid,
+        agent: currentAgent,
+        user: currentUser,
+        loaded: true,
+        events: [],
+        createdAt: Date.now()
+      });
+      await selectSession(sid);
+      updateSessionList();
+    }catch(e){
+      addSystemBubble('Failed to create session: ' + e.message);
+    }
+  }
+
+  async function selectSession(sessionId){
+    currentSessionId = sessionId;
+    document.getElementById('messageInput').disabled = false;
+    document.getElementById('sendButton').disabled = false;
+
+    if (!sessions.get(sessionId)?.loaded){
+      const ok = await loadSession(sessionId);
+      if (!ok){
+        sessions.delete(sessionId);
+        updateSessionList();
+        return;
+      }
+    }
+    updateSessionInfo();
+    updateSessionList();
+    renderSessionTurns(sessions.get(sessionId).events);
+  }
+
+  async function deleteSession(sessionId){
+    try{
+      const resp = await fetch(`${CONFIG.serverUrl}/apps/${currentAgent}/users/${currentUser}/sessions/${sessionId}`, {
+        method:'DELETE'
+      });
+      if (!resp.ok && resp.status !== 204) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+
+      const wasCurrent = currentSessionId === sessionId;
+      sessions.delete(sessionId);
+
+      if (wasCurrent){
+        const sorted = getSortedSessionIds();
+        if (sorted.length > 0){
+          await selectSession(sorted[0]);
+        } else {
+          await createNewSession();
+        }
+      }
+      updateSessionList();
+      addSystemBubble(`Deleted ${sessionId}`);
+    }catch(e){
+      addSystemBubble(`Failed to delete ${sessionId}: ${e.message}`);
+    }
+  }
+
+  // ---------------- Render transcript with interim snapshots ----------------
+  function renderSessionTurns(events){
+    const msgs = getMessagesEl();
+    msgs.innerHTML = '';
+
+    let pendingTurn = null; // { items: [...], finalText: '' }
+
+    function moveLastInterimToFinal(turn){
+      if (turn.finalText) return;
+      for (let i = turn.items.length - 1; i >= 0; i--){
+        if (turn.items[i].type === 'interim'){
+          turn.finalText = turn.items[i].text;
+          turn.items.splice(i, 1);
+          return;
+        }
+      }
+    }
+
+    function flushTurn(){
+      if (!pendingTurn) return;
+      moveLastInterimToFinal(pendingTurn);
+      const ui = createProgressTurnUI({ running:false, collapsed:true, initialTitle:'Run details' });
+      for (const item of pendingTurn.items){
+        if (item.type === 'interim'){ ui.setInterimText(item.text); ui.finalizeInterim(); }
+        else if (item.type === 'call'){ ui.appendToolCall(item.name, item.payload); }
+        else if (item.type === 'resp'){ ui.appendToolResponse(item.name, item.payload); }
+      }
+      ui.finish();
+      addAssistantAnswerBubble(pendingTurn.finalText || '(no answer)');
+      pendingTurn = null;
+    }
+
+    for (const ev of events){
+      const parts = ev.content?.parts || [];
+      const isUser = ev.author === 'user';
+
+      if (isUser){
+        flushTurn();
+        const userText = parts.filter(p=>p.text).map(p=>p.text).join('\n\n');
+        addUserBubble(userText || '(no text)');
+        pendingTurn = { items: [], finalText: '' };
+        continue;
+      }
+
+      if (!pendingTurn) pendingTurn = { items: [], finalText: '' };
+
+      const textCombined = parts.filter(p=>p.text).map(p=>p.text).join('');
+      if (textCombined){
+        const last = pendingTurn.items[pendingTurn.items.length - 1];
+        if (last && last.type === 'interim'){
+          last.text = mergeStreamingText(last.text, textCombined);
+        } else {
+          pendingTurn.items.push({ type:'interim', text: textCombined });
+        }
+      }
+      for (const p of parts){
+        if (p.functionCall)   pendingTurn.items.push({ type:'call', name:p.functionCall.name,   payload:p.functionCall.args });
+        else if (p.functionResponse) pendingTurn.items.push({ type:'resp', name:p.functionResponse.name, payload:p.functionResponse.response });
+      }
+    }
+    flushTurn();
+  }
+
+  // ---------------- Send message ----------------
+  function sendMessage(){
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    if (!message || !currentSessionId) return;
+
+    addUserBubble(message);
+    input.value = '';
+
+    const isStreaming = document.getElementById('streaming').checked;
+    if (isStreaming) sendMessageStreaming(message);
+    else sendMessageNonStreaming(message);
+  }
+
+  async function sendMessageNonStreaming(message){
+    const loading = document.getElementById('loading');
+    loading.classList.add('show');
+
+    const ui = createProgressTurnUI({ running:true, collapsed:true, initialTitle:'Working…' });
+
+    try{
+      const body = {
+        app_name: currentAgent,
+        user_id: currentUser,
+        session_id: currentSessionId,
+        new_message: { role:'user', parts:[{ text: message }] }
+      };
+      const resp = await fetch(`${CONFIG.serverUrl}/run`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      const events = await resp.json();
+
+      let interimText = '';
+      let finalText = '';
+
+      for (const ev of events){
+        const parts = ev.content?.parts || [];
+        for (const p of parts){
+          if (p.functionCall){ ui.setStatus(`Calling ${p.functionCall.name}…`); ui.finalizeInterim(); ui.appendToolCall(p.functionCall.name, p.functionCall.args); }
+          else if (p.functionResponse){ ui.setStatus(`Received ${p.functionResponse.name}…`); ui.appendToolResponse(p.functionResponse.name, p.functionResponse.response); }
+        }
+        const txt = parts.filter(p=>p.text).map(p=>p.text).join('');
+        if (txt){
+          if (ev.partial === true){
+            interimText = mergeStreamingText(interimText, txt);
+            ui.setStatus('Writing…');
+            ui.setInterimText(interimText);
+          } else {
+            finalText = txt;
+          }
+        }
+      }
+
+      ui.finish();
+      addAssistantAnswerBubble(finalText || interimText || '(no answer)');
+    }catch(e){
+      addSystemBubble('Error: ' + e.message);
+    }finally{
+      loading.classList.remove('show');
+    }
+  }
+
+  async function sendMessageStreaming(message){
+    const loading = document.getElementById('loading');
+    loading.classList.add('show');
+    loading.innerHTML = '<div>Streaming… <span class="spinner" style="vertical-align:middle;display:inline-block"></span></div>';
+
+    const ui = createProgressTurnUI({ running:true, collapsed:true, initialTitle:'Working…' });
+    let liveInterim = '';
+    let finalText  = '';
+
+    function handleEvent(ev){
+      if (ev.id && processedEvents.has(ev.id)) return;
+      if (ev.id) processedEvents.add(ev.id);
+
+      const parts = ev.content?.parts || [];
+      const isPartial = ev.partial === true;
+
+      const txt = parts.filter(p=>p.text).map(p=>p.text).join('');
+      if (txt){
+        if (isPartial){
+          liveInterim = mergeStreamingText(liveInterim, txt);
+          ui.setStatus('Writing…');
+          ui.setInterimText(liveInterim);
+        } else {
+          finalText = txt;
+        }
+      }
+      for (const p of parts){
+        if (p.functionCall){ ui.setStatus(`Calling ${p.functionCall.name}…`); ui.finalizeInterim(); ui.appendToolCall(p.functionCall.name, p.functionCall.args); }
+        else if (p.functionResponse){ ui.setStatus(`Received ${p.functionResponse.name}…`); ui.appendToolResponse(p.functionResponse.name, p.functionResponse.response); }
+      }
+      maybeScrollToBottom();
+    }
+
+    try{
+      const body = {
+        app_name: currentAgent,
+        user_id: currentUser,
+        session_id: currentSessionId,
+        new_message: { role:'user', parts:[{ text: message }] },
+        streaming: true
+      };
+      const resp = await fetch(`${CONFIG.serverUrl}/run_sse`, {
+        method:'POST',
+        headers: { 'Content-Type':'application/json', 'Accept':'text/event-stream' },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true){
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream:true });
+        const chunks = buffer.split('\n\n');
+        buffer = chunks.pop() ?? '';
+        for (const evt of chunks){
+          const lines = evt.split('\n');
+          for (const line of lines){
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (!payload) continue;
+            try { handleEvent(JSON.parse(payload)); }
+            catch (e){ console.warn('Bad SSE JSON', e); }
+          }
+        }
+      }
+
+      ui.finish();
+      const answer = finalText || liveInterim || '(no answer)';
+      addAssistantAnswerBubble(answer);
+    }catch(e){
+      addSystemBubble(`Streaming error: ${e.message}. Falling back to non-streaming.`);
+      setTimeout(()=>sendMessageNonStreaming(message), 300);
+    }finally{
+      loading.classList.remove('show');
+      loading.innerHTML = '<div>Processing...</div>';
+    }
+  }
+
+  // ---------------- Init ----------------
+  document.getElementById('streaming').addEventListener('change', setStreamingStatus);
+  document.getElementById('messageInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+  window.addEventListener('load', () => {
+    setStreamingStatus();
+    connectToServer();
+  });
+</script>
+</body>
+</html>
