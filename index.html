@@ -28,7 +28,15 @@
     .sidebar{
       width:260px;background:#fff;border-right:1px solid #e0e0e0;padding:1rem;overflow-y:auto
     }
-    .sidebar h3{color:#333;margin-bottom:1rem;font-size:1rem}
+    .sidebar-header{
+      display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem
+    }
+    .sidebar h3{color:#333;font-size:1rem}
+    .icon-button{
+      border:none;background:#e0e0e0;color:#333;padding:.2rem .45rem;border-radius:6px;
+      cursor:pointer;font-size:.9rem;line-height:1
+    }
+    .icon-button:hover{background:#d5d5d5}
     .session-list{list-style:none}
     .session-item{
       padding:.6rem .7rem;margin-bottom:.5rem;background:#f8f9fa;border-radius:8px;cursor:pointer
@@ -47,7 +55,30 @@
     .session-agent{font-size:.8rem;opacity:.7;margin-top:.25rem}
 
     .chat-container{flex:1;display:flex;flex-direction:column;min-width:0;background:#fff}
-    .session-info{padding:.7rem 1rem;background:#f8f9fa;border-bottom:1px solid #e0e0e0;color:#666;font-size:.92rem}
+    .session-info{
+      padding:.7rem 1rem;background:#f8f9fa;border-bottom:1px solid #e0e0e0;
+      color:#666;font-size:.92rem;display:flex;flex-direction:column;gap:.5rem
+    }
+    .session-controls{
+      display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end
+    }
+    .session-controls label{
+      display:flex;flex-direction:column;font-size:.78rem;color:#555;gap:.2rem
+    }
+    .session-controls select,
+    .session-controls input{
+      min-width:160px;padding:.45rem .6rem;border:1px solid #ccc;border-radius:6px;font-size:.92rem;
+      background:#fff;color:#111
+    }
+    .session-controls button{
+      padding:.5rem 1rem;border:none;border-radius:6px;background:#1976d2;color:#fff;cursor:pointer
+    }
+    .session-controls button:hover{background:#1565c0}
+    .session-controls .ghost-button{
+      background:#e0e0e0;color:#333
+    }
+    .session-controls .ghost-button:hover{background:#d5d5d5}
+    .session-status{font-size:.85rem;color:#666}
 
     .messages{
       flex:1;min-height:0;
@@ -156,7 +187,10 @@
 
 <div class="main-container">
   <aside class="sidebar">
-    <h3>Sessions</h3>
+    <div class="sidebar-header">
+      <h3>Sessions</h3>
+      <button class="icon-button" type="button" title="Reload sessions" onclick="refreshSessionsList()">⟳</button>
+    </div>
     <ul class="session-list" id="sessionList">
       <li class="system-message">No sessions yet</li>
     </ul>
@@ -166,7 +200,21 @@
   </aside>
 
   <main class="chat-container">
-    <div class="session-info" id="sessionInfo">Not connected to any session</div>
+    <div class="session-info" id="sessionInfo">
+      <div class="session-controls">
+        <label>
+          Agent
+          <select id="agentSelect"></select>
+        </label>
+        <label>
+          User
+          <input type="text" id="userInput" placeholder="Enter user id"/>
+        </label>
+        <button type="button" onclick="applySessionSettings()">Apply</button>
+        <button type="button" class="ghost-button" onclick="reloadCurrentSession()">Reload Session</button>
+      </div>
+      <div class="session-status" id="sessionStatusText">Not connected to any session</div>
+    </div>
     <div class="messages" id="messages">
       <div class="bubble system">Welcome! Connect to a server and select an agent.</div>
     </div>
@@ -181,17 +229,24 @@
 <script>
   // ---------------- Config / State ----------------
   const CONFIG = {
-    serverUrl: 'http://127.0.0.1:8000',
-    defaultAgent: 'stats',
+    serverUrl: 'http://172.23.205.140:8080',
+    defaultAgent: 'Stats',
     defaultUser: 'demo-user'
   };
   let currentAgent = CONFIG.defaultAgent;
   let currentUser  = CONFIG.defaultUser;
   let currentSessionId = null;
+  let availableAgents = [];
 
   // sessions: Map<id, { id, agent, user, loaded, events, createdAt }>
   const sessions = new Map();
   const processedEvents = new Set();
+  function setInputControlsEnabled(enabled){
+    const input = document.getElementById('messageInput');
+    const button = document.getElementById('sendButton');
+    if (input) input.disabled = !enabled;
+    if (button) button.disabled = !enabled;
+  }
 
   // ---------------- Time parsing helpers ----------------
   function parseTimestamp(v){
@@ -435,20 +490,170 @@
   // ---------------- Sessions ----------------
   async function connectToServer(){
     try{
+      const agentsOk = await fetchAvailableAgents();
+      await reloadSessionsForCurrentSettings('Connecting to server…');
       addSystemBubble('Connected to server successfully');
-      await loadAllExistingSessions();
-      if (sessions.size === 0) await createNewSession();
-      else await selectSession(getSortedSessionIds()[0]);
+      if (!agentsOk){
+        addSystemBubble('Could not refresh agent list; enter an agent manually if needed.');
+      }
     }catch(e){
       addSystemBubble('Failed to connect to server: ' + e.message);
     }
   }
 
+  function populateAgentSelect(){
+    const select = document.getElementById('agentSelect');
+    if (!select) return;
+    const seen = new Set();
+    const list = (availableAgents.length > 0 ? availableAgents : [currentAgent || CONFIG.defaultAgent]).filter(Boolean);
+    select.innerHTML = '';
+    for (const agent of list){
+      if (seen.has(agent)) continue;
+      const opt = document.createElement('option');
+      opt.value = agent;
+      opt.textContent = agent;
+      if (agent === currentAgent) opt.selected = true;
+      select.appendChild(opt);
+      seen.add(agent);
+    }
+    if (currentAgent && !seen.has(currentAgent)){
+      const opt = document.createElement('option');
+      opt.value = currentAgent;
+      opt.textContent = currentAgent;
+      opt.selected = true;
+      select.appendChild(opt);
+    }
+  }
+
   function updateSessionInfo(){
-    const el = document.getElementById('sessionInfo');
-    el.textContent = (currentSessionId && currentAgent && currentUser)
-      ? `Session: ${currentSessionId} | Agent: ${currentAgent} | User: ${currentUser}`
-      : 'Not connected to any session';
+    const statusEl = document.getElementById('sessionStatusText');
+    const userInput = document.getElementById('userInput');
+    const agentSelect = document.getElementById('agentSelect');
+    if (userInput && userInput.value !== (currentUser || '')){
+      userInput.value = currentUser || '';
+    }
+    if (agentSelect){
+      if (currentAgent && !Array.from(agentSelect.options).some(o => o.value === currentAgent)){
+        const opt = document.createElement('option');
+        opt.value = currentAgent;
+        opt.textContent = currentAgent;
+        agentSelect.appendChild(opt);
+      }
+      if (currentAgent) agentSelect.value = currentAgent;
+    }
+    if (statusEl){
+      statusEl.textContent = (currentSessionId && currentAgent && currentUser)
+        ? `Session: ${currentSessionId} | Agent: ${currentAgent} | User: ${currentUser}`
+        : 'Not connected to any session';
+    }
+  }
+
+  function resetSessionState(){
+    currentSessionId = null;
+    sessions.clear();
+    processedEvents.clear();
+    updateSessionList();
+    const messages = getMessagesEl();
+    if (messages) messages.innerHTML = '';
+    setInputControlsEnabled(false);
+    updateSessionInfo();
+  }
+
+  async function fetchAvailableAgents(){
+    let ok = true;
+    try{
+      const resp = await fetch(`${CONFIG.serverUrl}/list-apps`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      const list = await resp.json();
+      if (Array.isArray(list) && list.length > 0){
+        availableAgents = list;
+        if (!availableAgents.includes(currentAgent)){
+          currentAgent = availableAgents[0];
+        }
+      }
+    }catch(e){
+      console.warn('fetchAvailableAgents error', e);
+      ok = false;
+    }finally{
+      populateAgentSelect();
+      updateSessionInfo();
+    }
+    return ok;
+  }
+
+  async function reloadSessionsForCurrentSettings(statusMessage){
+    resetSessionState();
+    if (statusMessage) addSystemBubble(statusMessage);
+    await loadAllExistingSessions();
+    if (sessions.size === 0){
+      await createNewSession();
+    } else {
+      await selectSession(getSortedSessionIds()[0]);
+    }
+  }
+
+  async function refreshSessionsList(){
+    if (!currentAgent || !currentUser){
+      addSystemBubble('Set agent and user before refreshing sessions.');
+      return;
+    }
+    const previousSession = currentSessionId;
+    setInputControlsEnabled(false);
+    sessions.clear();
+    processedEvents.clear();
+    updateSessionList();
+    await loadAllExistingSessions();
+    if (sessions.size === 0){
+      await createNewSession();
+      addSystemBubble('No existing sessions found; created a new one.');
+      return;
+    }
+    const targetId = previousSession && sessions.has(previousSession)
+      ? previousSession
+      : getSortedSessionIds()[0];
+    await selectSession(targetId);
+    addSystemBubble('Session list refreshed.');
+  }
+
+  async function reloadCurrentSession(){
+    if (!currentSessionId){
+      addSystemBubble('No active session to reload.');
+      return;
+    }
+    const session = sessions.get(currentSessionId);
+    if (session) session.loaded = false;
+    await selectSession(currentSessionId);
+    addSystemBubble(`Reloaded ${currentSessionId}.`);
+  }
+
+  async function applySessionSettings(){
+    const userInput = document.getElementById('userInput');
+    const agentSelect = document.getElementById('agentSelect');
+    if (!userInput || !agentSelect) return;
+
+    const nextUser = userInput.value.trim();
+    if (!nextUser){
+      addSystemBubble('Please enter a user identifier before applying.');
+      return;
+    }
+    const nextAgent = agentSelect.value || currentAgent;
+    const changed = nextAgent !== currentAgent || nextUser !== currentUser;
+
+    currentAgent = nextAgent;
+    currentUser = nextUser;
+    if (nextAgent && !availableAgents.includes(nextAgent)){
+      availableAgents.push(nextAgent);
+      populateAgentSelect();
+    }
+    updateSessionInfo();
+
+    if (!changed){
+      addSystemBubble('Agent and user unchanged.');
+      return;
+    }
+
+    await reloadSessionsForCurrentSettings(`Switching to agent "${currentAgent}" as "${currentUser}"...`);
+    addSystemBubble(`Ready with agent "${currentAgent}" for user "${currentUser}".`);
   }
 
   function getSortedSessionIds(){
@@ -567,8 +772,7 @@
 
   async function selectSession(sessionId){
     currentSessionId = sessionId;
-    document.getElementById('messageInput').disabled = false;
-    document.getElementById('sendButton').disabled = false;
+    setInputControlsEnabled(true);
 
     if (!sessions.get(sessionId)?.loaded){
       const ok = await loadSession(sessionId);
@@ -819,6 +1023,10 @@
 
   // ---------------- Init ----------------
   document.getElementById('streaming').addEventListener('change', setStreamingStatus);
+  populateAgentSelect();
+  updateSessionInfo();
+  setInputControlsEnabled(false);
+
   document.getElementById('messageInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
   window.addEventListener('load', () => {
     setStreamingStatus();
